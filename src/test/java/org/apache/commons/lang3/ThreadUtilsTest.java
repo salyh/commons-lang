@@ -29,7 +29,6 @@ import static org.junit.Assert.assertTrue;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
@@ -42,68 +41,68 @@ import org.junit.Test;
  */
 public class ThreadUtilsTest {
 
-    @Test(expected=IllegalArgumentException.class)
-    public void testNullThreadName() throws InterruptedException {
+    @Test(expected=NullPointerException.class)
+    public void testNullThreadName() {
         ThreadUtils.findThreadsByName(null);
     }
 
-    @Test(expected=IllegalArgumentException.class)
-    public void testNullThreadGroupName() throws InterruptedException {
+    @Test(expected=NullPointerException.class)
+    public void testNullThreadGroupName() {
         ThreadUtils.findThreadGroupsByName(null);
     }
 
-    @Test(expected=IllegalArgumentException.class)
-    public void testNullThreadThreadGroupName1() throws InterruptedException {
+    @Test(expected=NullPointerException.class)
+    public void testNullThreadThreadGroupName1() {
         ThreadUtils.findThreadsByName(null, "tgname");
     }
 
-    @Test(expected=IllegalArgumentException.class)
-    public void testNullThreadThreadGroupName2() throws InterruptedException {
+    @Test(expected=NullPointerException.class)
+    public void testNullThreadThreadGroupName2() {
         ThreadUtils.findThreadsByName("tname", (String) null);
     }
 
-    @Test(expected=IllegalArgumentException.class)
-    public void testNullThreadThreadGroupName3() throws InterruptedException {
+    @Test(expected=NullPointerException.class)
+    public void testNullThreadThreadGroupName3() {
         ThreadUtils.findThreadsByName(null, (String) null);
     }
 
-    @Test(expected=IllegalArgumentException.class)
-    public void testNullThreadThreadGroup1() throws InterruptedException {
+    @Test(expected=NullPointerException.class)
+    public void testNullThreadThreadGroup1() {
         ThreadUtils.findThreadsByName("tname", (ThreadGroup) null);
     }
 
-    @Test(expected=IllegalArgumentException.class)
-    public void testNullThreadThreadGroup2() throws InterruptedException {
+    @Test(expected=NullPointerException.class)
+    public void testNullThreadThreadGroup2() {
         ThreadUtils.findThreadById(1L, (ThreadGroup) null);
     }
 
-    @Test(expected=IllegalArgumentException.class)
-    public void testNullThreadThreadGroup3() throws InterruptedException {
+    @Test(expected=NullPointerException.class)
+    public void testNullThreadThreadGroup3() {
         ThreadUtils.findThreadsByName(null, (ThreadGroup) null);
     }
 
     @Test(expected=IllegalArgumentException.class)
-    public void testInvalidThreadId() throws InterruptedException {
+    public void testInvalidThreadId() {
         ThreadUtils.findThreadById(-5L);
     }
 
-    @Test(expected=IllegalArgumentException.class)
-    public void testThreadGroupsByIdFail() throws InterruptedException {
+    @Test(expected=NullPointerException.class)
+    public void testThreadGroupsByIdFail() {
         ThreadUtils.findThreadById(Thread.currentThread().getId(), (String) null);
     }
 
     @Test
-    public void testNoThread() throws InterruptedException {
+    public void testNoThread() {
         assertEquals(0, ThreadUtils.findThreadsByName("some_thread_which_does_not_exist_18762ZucTT").size());
     }
 
     @Test
-    public void testNoThreadGroup() throws InterruptedException {
+    public void testNoThreadGroup() {
         assertEquals(0, ThreadUtils.findThreadGroupsByName("some_thread_group_which_does_not_exist_18762ZucTTII").size());
     }
 
     @Test
-    public void testSystemThreadGroupExists() throws InterruptedException {
+    public void testSystemThreadGroupExists() {
         final ThreadGroup systemThreadGroup = ThreadUtils.getSystemThreadGroup();
         assertNotNull(systemThreadGroup);
         assertNull(systemThreadGroup.getParent());
@@ -111,13 +110,13 @@ public class ThreadUtilsTest {
     }
 
     @Test
-    public void testAtLeastOneThreadExists() throws InterruptedException {
+    public void testAtLeastOneThreadExists() {
         assertTrue(ThreadUtils.getAllThreads().size() > 0);
     }
 
     @Test
-    public void testAtLeastTwoThreadGroupsExists() throws InterruptedException {
-        assertTrue(ThreadUtils.getAllThreadGroups().size() > 1);
+    public void testAtLeastOneThreadGroupsExists() {
+        assertTrue(ThreadUtils.getAllThreadGroups().size() >= 1);
     }
 
     @Test
@@ -263,7 +262,7 @@ public class ThreadUtilsTest {
     }
 
     @Test
-    public void testConstructor() throws InterruptedException {
+    public void testConstructor() {
         assertNotNull(new ThreadUtils());
         final Constructor<?>[] cons = ThreadUtils.class.getDeclaredConstructors();
         assertEquals(1, cons.length);
@@ -295,60 +294,26 @@ public class ThreadUtilsTest {
         final List<Thread> threads = Arrays.asList(t1,t2,t3,t4,t5,t6,t7,t8,t9,t10);
 
         try {
-            for (final Iterator iterator = threads.iterator(); iterator.hasNext();) {
-                final Thread thread = (Thread) iterator.next();
+            for (final Thread thread : threads) {
                 thread.start();
             }
             //new ThreadUtils.ThreadGroupHolder(ThreadUtils.getSystemThreadGroup()).accept(new PrintVisitor());
 
-            assertTrue(ThreadUtils.getAllThreadGroups().size() >= 8);
+            assertTrue(ThreadUtils.getAllThreadGroups().size() >= 7);
             assertTrue(ThreadUtils.getAllThreads().size() >= 11);
            
         }finally {
-            for (final Iterator iterator = threads.iterator(); iterator.hasNext();) {
-                final Thread thread = (Thread) iterator.next();
+            for (final Thread thread : threads) {
                 thread.interrupt();
                 thread.join();
             }
-            for (final Iterator iterator = threadGroups.iterator(); iterator.hasNext();) {
-                final ThreadGroup threadGroup = (ThreadGroup) iterator.next();
+            for (final ThreadGroup threadGroup : threadGroups) {
                 if(!threadGroup.isDestroyed())
                 threadGroup.destroy();
             }
         }
     }
     
-    /*public static class PrintVisitor implements Visitor
-    {
-        private int depth = 0;
-
-        @Override
-        public boolean visitEnter(final ThreadGroupHolder threadGroup) {
-            indent();
-            System.out.println("- TG "+threadGroup.getThreadGroup().getName());
-            depth++;
-            return true;
-        }
-
-        @Override
-        public boolean visitLeave(final ThreadGroupHolder threadGroup) {
-            depth--;
-            return true;
-        }
-
-        @Override
-        public boolean visit(final ThreadHolder thread) {
-            indent();
-            System.out.println("- T ["+thread.getThread().getState()+"] " +thread.getThread().getId()+" ("+thread.getThread().getName()+")");
-            return true;
-        }
-
-        private void indent() {
-            System.out.print(StringUtils.repeat(' ', depth));
-        }
-
-    }*/
-
     private static class TestThread extends Thread {
         private final CountDownLatch latch = new CountDownLatch(1);
 
