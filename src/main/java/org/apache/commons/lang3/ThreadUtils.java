@@ -16,10 +16,11 @@
  */
 package org.apache.commons.lang3;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+
+import org.apache.commons.lang3.util.function.Collector;
+import org.apache.commons.lang3.util.function.Predicate;
+import org.apache.commons.lang3.util.function.Predicates;
 
 /**
  * <p>
@@ -36,9 +37,7 @@ import java.util.List;
  */
 public class ThreadUtils {
 
-    private static final int ENUMERATION_GUESS_EXTRA = 3;
-
-    /**
+	/**
      * Return the active thread with the specified id if it belong's to the specified thread group
      *
      * @param threadId The thread id
@@ -53,14 +52,9 @@ public class ThreadUtils {
      *          thread groups from this thread's thread group up to the system thread group
      */
     public static Thread findThreadById(final long threadId, final ThreadGroup threadGroup) {
-        if (threadGroup == null) {
-            throw new IllegalArgumentException("The threadGroup must not be null");
-        }
-        final Thread thread = findThreadById(threadId);
-        if(thread != null && threadGroup.equals(thread.getThreadGroup())) {
-            return thread;
-        }
-        return null;
+    	Collector<Thread> collector = new Collector<Thread>(new ThreadIdPredicate(threadId), 1); 	
+    	visitThreads(threadGroup, true, collector);
+    	return collector.getFirst();
     }
 
     /**
@@ -78,14 +72,14 @@ public class ThreadUtils {
      *          thread groups from this thread's thread group up to the system thread group
      */
     public static Thread findThreadById(final long threadId, final String threadGroupName) {
-        if (threadGroupName == null) {
-            throw new IllegalArgumentException("The threadGroupName must not be null");
-        }
-        final Thread thread = findThreadById(threadId);
-        if(thread != null && thread.getThreadGroup() != null && thread.getThreadGroup().getName().equals(threadGroupName)) {
-            return thread;
-        }
-        return null;
+    	// TODO: not super efficient, not sure why this method is desired
+    	Collector<Thread> collector = new Collector<Thread>(new ThreadIdPredicate(threadId), 1); 	
+    	for(ThreadGroup group : findThreadGroupsByName(threadGroupName)) {
+        	if(!visitThreads(group, false, collector)) {
+        		break;
+        	}
+    	}
+    	return collector.getFirst();
     }
 
     /**
@@ -103,15 +97,9 @@ public class ThreadUtils {
      *          thread groups from this thread's thread group up to the system thread group
      */
     public static Collection<Thread> findThreadsByName(final String threadName, final ThreadGroup threadGroup) {
-        if (threadName == null) {
-            throw new IllegalArgumentException("The threadName must not be null");
-        }
-        if (threadGroup == null) {
-            throw new IllegalArgumentException("The threadGroupName must not be null");
-        }
-        final NameNameVisitor nameNameVisitor = new NameNameVisitor(threadName, threadGroup);
-        new ThreadUtils.ThreadGroupHolder(ThreadUtils.getSystemThreadGroup()).accept(nameNameVisitor);
-        return Collections.unmodifiableCollection(nameNameVisitor.getResult());
+    	Collector<Thread> collector = new Collector<Thread>(new ThreadNamePredicate(threadName)); 	
+    	visitThreads(threadGroup, true, collector);
+    	return collector.getResults();
     }
 
     /**
@@ -129,15 +117,14 @@ public class ThreadUtils {
      *          thread groups from this thread's thread group up to the system thread group
      */
     public static Collection<Thread> findThreadsByName(final String threadName, final String threadGroupName) {
-        if (threadName == null) {
-            throw new IllegalArgumentException("The threadName must not be null");
-        }
-        if (threadGroupName == null) {
-            throw new IllegalArgumentException("The threadGroupName must not be null");
-        }
-        final NameNameVisitor nameNameVisitor = new NameNameVisitor(threadName, threadGroupName);
-        new ThreadUtils.ThreadGroupHolder(ThreadUtils.getSystemThreadGroup()).accept(nameNameVisitor);
-        return Collections.unmodifiableCollection(nameNameVisitor.getResult());
+    	// TODO: not super efficient, not sure why this method is desired
+    	Collector<Thread> collector = new Collector<Thread>(new ThreadNamePredicate(threadName)); 	
+    	for(ThreadGroup group : findThreadGroupsByName(threadGroupName)) {
+        	if(!visitThreads(group, false, collector)) {
+        		break;
+        	}
+    	}
+    	return collector.getResults();
     }
 
     /**
@@ -153,12 +140,9 @@ public class ThreadUtils {
      *          thread groups from this thread's thread group up to the system thread group
      */
     public static Collection<ThreadGroup> findThreadGroupsByName(final String threadGroupName) {
-        if (threadGroupName == null) {
-            throw new IllegalArgumentException("The threadGroupName must not be null");
-        }
-        final NameVisitor nameVisitor = new NameVisitor(true, threadGroupName);
-        new ThreadUtils.ThreadGroupHolder(ThreadUtils.getSystemThreadGroup()).accept(nameVisitor);
-        return Collections.unmodifiableCollection(nameVisitor.getResult());
+    	Collector<ThreadGroup> collector = new Collector<ThreadGroup>(new ThreadGroupNamePredicate(threadGroupName)); 	
+    	visitAllThreadGroups(collector);
+    	return collector.getResults();
     }
 
     /**
@@ -172,9 +156,9 @@ public class ThreadUtils {
      *          thread groups from this thread's thread group up to the system thread group
      */
     public static Collection<ThreadGroup> getAllThreadGroups() {
-        final NameVisitor nameVisitor = new NameVisitor(true, null);
-        new ThreadUtils.ThreadGroupHolder(ThreadUtils.getSystemThreadGroup()).accept(nameVisitor);
-        return Collections.unmodifiableCollection(nameVisitor.getResult());
+    	Collector<ThreadGroup> collector = new Collector<>(Predicates.<ThreadGroup>alwaysTrue()); 	
+    	visitAllThreadGroups(collector);
+    	return collector.getResults();
     }
 
     /**
@@ -203,9 +187,9 @@ public class ThreadUtils {
      *          thread groups from this thread's thread group up to the system thread group
      */
     public static Collection<Thread> getAllThreads() {
-        final NameVisitor nameVisitor = new NameVisitor(false, null);
-        new ThreadUtils.ThreadGroupHolder(ThreadUtils.getSystemThreadGroup()).accept(nameVisitor);
-        return Collections.unmodifiableCollection(nameVisitor.getResult());
+    	Collector<Thread> collector = new Collector<>(Predicates.<Thread>alwaysTrue()); 	
+    	visitAllThreads(collector);
+    	return collector.getResults();
     }
 
     /**
@@ -221,12 +205,9 @@ public class ThreadUtils {
      *          thread groups from this thread's thread group up to the system thread group
      */
     public static Collection<Thread> findThreadsByName(final String threadName) {
-        if (threadName == null) {
-            throw new IllegalArgumentException("The threadName must not be null");
-        }
-        final NameVisitor nameVisitor = new NameVisitor(false, threadName);
-        new ThreadUtils.ThreadGroupHolder(ThreadUtils.getSystemThreadGroup()).accept(nameVisitor);
-        return Collections.unmodifiableCollection(nameVisitor.getResult());
+    	Collector<Thread> collector = new Collector<>(new ThreadNamePredicate(threadName)); 	
+    	visitAllThreads(collector);
+    	return collector.getResults();
     }
 
     /**
@@ -242,13 +223,10 @@ public class ThreadUtils {
      *          thread groups from this thread's thread group up to the system thread group
      */
     public static Thread findThreadById(final long threadId) {
-        if (threadId <= 0) {
-            throw new IllegalArgumentException("The threadId must be greater than zero");
-        }
-        final IdVisitor idVisitor = new IdVisitor(threadId);
-        new ThreadUtils.ThreadGroupHolder(ThreadUtils.getSystemThreadGroup()).accept(idVisitor);
-        return idVisitor.getThread();
-    }
+       	Collector<Thread> collector = new Collector<>(new ThreadIdPredicate(threadId), 1); 	
+    	visitAllThreads(collector);
+    	return collector.getFirst();
+     }
 
     /**
      * <p>
@@ -263,209 +241,131 @@ public class ThreadUtils {
         super();
     }
 
-    //Hierarchical Visitor Pattern
-    //make public?
-    private static interface Visitable {
-        public boolean accept(Visitor visitor);
+    /**
+     * Visit all active ThreadGroups starting from the system ThreadGroup. 
+     * Iteration over the ThreadGroups will halt once the predicate returns false.
+     * 
+     * @param predicate The predicate to invoked with active ThreadGroup(s)
+     */
+    public static void visitAllThreadGroups(Predicate<ThreadGroup> predicate) {
+    	ThreadGroup systemGroup = getSystemThreadGroup();
+    	visitThreadGroups(systemGroup, true, predicate);
     }
 
-    private static final class ThreadHolder implements Visitable {
-        private final Thread thread;
-
-        public Thread getThread() {
-            return thread;
+    /**
+     * Visit active ThreadGroup.
+     * Iteration over the ThreadGroups will halt once the predicate returns false.
+     * 
+     * @param group The ThreadGroup to iterate over.
+     * @param recurse If true, visit sub-groups of the given ThreadGroup; if false, just visit given ThreadGroup.
+     * @param predicate The predicate to invoked with active ThreadGroup(s).
+     * @return true, if all predicate always returned true
+     */
+    public static boolean visitThreadGroups(ThreadGroup group, boolean recurse, Predicate<ThreadGroup> predicate) {
+        if (group == null) {
+            throw new NullPointerException("The threadGroup must not be null");
+        }
+        if (predicate == null) {
+            throw new NullPointerException("The predicate must not be null");
         }
 
-        @Override
-        public boolean accept(final Visitor visitor)
-        {
-            return visitor.visit(this);
-        }
-
-        public ThreadHolder(final Thread thread) {
-            if(thread == null) {
-                throw new IllegalArgumentException("thread must not be null");
-            }
-            this.thread = thread;
-        }
+    	int count = group.activeGroupCount();
+    	ThreadGroup[] threadGroups;
+    	do {
+    		threadGroups = new ThreadGroup[count + (count>>1) + 1];
+	    	count = group.enumerate(threadGroups, recurse);
+    	}
+    	while(count == threadGroups.length);
+    	
+    	for(int i = 0; i<count; ++i) {
+    		if(!predicate.test(threadGroups[i])) {
+    			return false;
+    		}   		
+    	}
+    	return true;
     }
 
-    private static final class ThreadGroupHolder implements Visitable {
-        private final ThreadGroup threadGroup;
-
-        public ThreadGroupHolder(final ThreadGroup threadGroup) {
-            if(threadGroup == null) {
-                throw new IllegalArgumentException("thread group must not be null");
-            }
-            this.threadGroup = threadGroup;
-        }
-
-        public ThreadGroup getThreadGroup() {
-            return threadGroup;
-        }
-
-        @Override
-        public boolean accept(final Visitor v)
-        {
-            if (v.visitEnter(this))
-            {
-                int estimatedThreadCount = threadGroup.activeCount() + ENUMERATION_GUESS_EXTRA;
-                int threadCount = 0;
-                Thread[] threads;
-                do {
-                    estimatedThreadCount *= 2;
-                    threads = new Thread[estimatedThreadCount];
-                    threadCount = threadGroup.enumerate(threads, false);
-                    //return value of enumerate() must be strictly less than the array size according to javadoc
-                } while (threadCount >= estimatedThreadCount);
-
-                for (int i = 0; i < threadCount; i++) {
-                    final Thread thread = threads[i];
-                    if(!(new ThreadHolder(thread).accept(v))) {
-                        break;
-                    }
-                }
-
-                int estimatedThreadGroupCount = threadGroup.activeGroupCount() + ENUMERATION_GUESS_EXTRA;
-                int threadGroupCount = 0;
-                ThreadGroup[] threadGroups;
-                do {
-                    estimatedThreadGroupCount *= 2;
-                    threadGroups = new ThreadGroup[estimatedThreadGroupCount];
-                    threadGroupCount = threadGroup.enumerate(threadGroups, false);
-                    //return value of enumerate() must be strictly less than the array size according to javadoc
-                } while (threadGroupCount >= estimatedThreadGroupCount);
-
-                for (int i = 0; i < threadGroupCount; i++) {
-                    final ThreadGroup threadGroup = threadGroups[i];
-                    if (!(new ThreadGroupHolder(threadGroup)).accept(v)) {
-                        break;
-                    }
-                }
-            }
-            return v.visitLeave( this );
-        }
+    /**
+     * Visit all active threads starting from the system ThreadGroup. 
+     * Iteration over the threads will halt once the predicate returns false.
+     * 
+     * @param predicate The predicate to invoked with active Thread(s)
+     */
+    public static void visitAllThreads(Predicate<Thread> predicate) {
+    	ThreadGroup systemGroup = getSystemThreadGroup();
+    	visitThreads(systemGroup, true, predicate);
     }
 
-    private static interface Visitor
-    {
-        boolean visitEnter(ThreadGroupHolder threadGroup); // going into a branch
-        boolean visitLeave(ThreadGroupHolder threadGroup); // coming out
-        boolean visit(ThreadHolder thread);
+    /**
+     * Visit active threads. Iteration over the threads will halt once the predicate returns false.
+     * 
+     * @param group The ThreadGroup to iterate over.
+     * @param recurse If true, visit sub-groups of the given ThreadGroup; if false, just visit Thread of the given ThreadGroup.
+     * @param predicate The predicate to invoked with active Thread(s).
+     * @return true, if all predicate always returned true
+     */
+    public static boolean visitThreads(ThreadGroup group, boolean recurse, Predicate<Thread> predicate) {
+    	int count = group.activeCount();
+    	Thread[] threads;
+    	do {
+	    	threads = new Thread[count + (count>>1) + 1];
+	    	count = group.enumerate(threads, recurse);
+    	}
+    	while(count == threads.length);
+    	
+    	for(int i = 0; i<count; ++i) {
+    		if(!predicate.test(threads[i])) {
+    			return false;
+    		}   		
+    	}
+    	return true;
     }
-
-
-    //private visitors, not for the public
-    private static class IdVisitor implements Visitor {
-        private Thread thread;
+    
+    public static class ThreadIdPredicate implements Predicate<Thread> {
         private final long threadId;
 
-        public IdVisitor(final long threadId) {
+        public ThreadIdPredicate(final long threadId) {
+        	if(threadId<=0) {
+        		throw new IllegalArgumentException("threadId must be positive value");
+        	}
             this.threadId = threadId;
         }
 
-        public Thread getThread() {
-            return thread;
-        }
-
         @Override
-        public boolean visitLeave(final ThreadGroupHolder threadGroup) {
-            return thread==null;
-        }
-
-        @Override
-        public boolean visitEnter(final ThreadGroupHolder threadGroup) {
-            return thread==null;
-        }
-
-        @Override
-        public boolean visit(final ThreadHolder thread) {
-            if(thread.getThread().getId() == threadId) {
-                this.thread = thread.getThread();
-                return false;
-            }
-
-            return true;
+        public boolean test(final Thread thread) {
+            return thread.getId()==threadId;
         }
     }
-
-    private static class NameVisitor implements Visitor {
-        private final boolean lookingForThreadGroup;
+    
+    public static class ThreadNamePredicate implements Predicate<Thread> {
         private final String name;
-        private final List result = new ArrayList();
 
-        public NameVisitor(final boolean lookingForThreadGroup, final String name) {
-            this.lookingForThreadGroup = lookingForThreadGroup;
+        public ThreadNamePredicate(final String name) {
+            if (name == null) {
+                throw new NullPointerException("The name must not be null");
+            }
             this.name = name;
         }
 
         @Override
-        public boolean visitLeave(final ThreadGroupHolder threadGroup) {
-            return true;
-        }
-
-        @Override
-        public boolean visitEnter(final ThreadGroupHolder threadGroup) {
-            if(lookingForThreadGroup && (name == null || threadGroup.getThreadGroup().getName().equals(name))) {
-                result.add(threadGroup.getThreadGroup());
-            }
-            return true;
-        }
-
-        @Override
-        public boolean visit(final ThreadHolder thread) {
-            if(!lookingForThreadGroup && ( name == null || thread.getThread().getName().equals(name))) {
-                result.add(thread.getThread());
-            }
-            return true;
-        }
-
-        public List getResult() {
-            return result;
+        public boolean test(final Thread thread) {
+            return thread.getName().equals(name);
         }
     }
+    
+    public static class ThreadGroupNamePredicate implements Predicate<ThreadGroup> {
+        private final String name;
 
-    private static class NameNameVisitor implements Visitor {
-        private final String threadName;
-        private final String threadGroupName;
-        private final ThreadGroup threadGroup;
-        private final List result = new ArrayList();
-
-        public NameNameVisitor(final String threadName, final String threadGroupName) {
-            this.threadName = threadName;
-            this.threadGroupName = threadGroupName;
-            this.threadGroup = null;
-        }
-
-        public NameNameVisitor(final String threadName, final ThreadGroup threadGroup) {
-            this.threadName = threadName;
-            this.threadGroup = threadGroup;
-            this.threadGroupName = null;
-        }
-
-        @Override
-        public boolean visitLeave(final ThreadGroupHolder threadGroup) {
-            return true;
-        }
-
-        @Override
-        public boolean visitEnter(final ThreadGroupHolder threadGroup) {
-            return true;
-        }
-
-        @Override
-        public boolean visit(final ThreadHolder thread) {
-            if(threadGroup == null && thread.getThread().getName().equals(threadName) && thread.getThread().getThreadGroup().getName().equals(threadGroupName)) {
-                result.add(thread.getThread());
-            }else if(threadGroup != null && thread.getThread().getName().equals(threadName) && thread.getThread().getThreadGroup().equals(threadGroup)) {
-                result.add(thread.getThread());
+        public ThreadGroupNamePredicate(final String name) {
+            if (name == null) {
+                throw new NullPointerException("The name must not be null");
             }
-            return true;
+            this.name = name;
         }
 
-        public List getResult() {
-            return result;
+        @Override
+        public boolean test(final ThreadGroup threadGroup) {
+            return threadGroup.getName().equals(name);
         }
     }
-
 }
